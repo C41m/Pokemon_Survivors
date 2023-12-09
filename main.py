@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 from analise import etl, qnt_partidas_func, top5_sup_jogadores_func, sup_mais_usados_func, herois_mais_usados_func, vitorias_geral_func, dps_heroisup_geral_func, jogador_mais_tempo_func, heroi_preferido_jogador_func, hist_partidas_func
-
+from time import time
 
 url = "https://rootd4.vercel.app/score/all"
 response = requests.get(url)
@@ -144,3 +144,6 @@ with tab2:
             st.markdown('### Suportes mais utilizados')
             top5_sup_jogadores = top5_sup_jogadores_func(stats_df, info_df)
             st.dataframe(top5_sup_jogadores, hide_index=True, use_container_width=True)
+with tab3:
+    st.write("# Cheats! >>>>>>>>>>> [link](https://rb.gy/d6lzey) OMFG")
+    st.image('https://steamuserimages-a.akamaihd.net/ugc/93849814307728107/05C64279F092F4F09F8423C0FC0951055922702D/?imw=5000&imh=5000&ima=fit&impolicy=Letterbox&imcolor=%23000000&letterbox=false')
