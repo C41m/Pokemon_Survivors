@@ -3,6 +3,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
 import json
+from pandas import json_normalize  
 
 
 def etl(df):
@@ -95,7 +96,7 @@ def top5_sup_jogadores_func(stats_df, info_df):
 
 
     # Exibir o DataFrame resultante
-    fig = top5_suportes_jogadores[['name', 'Top 5 Suportes']]
+    fig = top5_suportes_jogadores[['name', 'Top 5 Suportes']].rename(columns={'name': 'Jogador'})
     
     return fig
 
@@ -104,14 +105,21 @@ def sup_mais_usados_func(stats_df):
     # Contar a ocorrência de cada Pokémon
     suportes_mais_usados = stats_df['pokemon'].value_counts().reset_index(name='count')
 
+    #Remover o heroi -1
+    suportes_mais_usados = suportes_mais_usados.query('pokemon != -1').reset_index(drop=True)
+
     # Adicionar nomes de Pokémon usando a função support_id_nome
     suportes_mais_usados['pokemon'] = suportes_mais_usados['pokemon'].apply(support_id_nome)
+    
+    suportes_mais_usados = suportes_mais_usados.rename(columns={'pokemon': 'Nome', 'count':'Quant'})
 
     # Criar o gráfico de barras com o Plotly
-    fig = px.bar(suportes_mais_usados, x='pokemon', y='count')
+    fig = px.bar(suportes_mais_usados, x='Nome', y='Quant')
     fig.update_layout(xaxis=dict(tickangle=45))  # Ajustar a rotação dos rótulos para melhor legibilidade
+    
+    fig_table = suportes_mais_usados
 
-    return fig
+    return fig, fig_table
 
 def herois_mais_usados_func(info_df):
     # Criar um DataFrame com os dados
@@ -122,9 +130,9 @@ def herois_mais_usados_func(info_df):
     # Criar uma tabela com a contagem de cada personagem usando groupby
     contagem_heroi = info_df.groupby(['hero_nome']).size().reset_index(name='quantidade')
 
-    fig_table = contagem_heroi
     # Criar um gráfico de pizza com Plotly Express
     fig = px.pie(contagem_heroi, values='quantidade', names='hero_nome')
+    fig_table = contagem_heroi.rename(columns={'hero_nome': 'Heroi', 'quantidade': 'Quant'})
 
     return fig, fig_table
 
@@ -141,8 +149,17 @@ def vitorias_geral_func(info_df):
 
     # Exibir a tabela
     resultado_final = pd.merge(vitorias_jogadores, media_tempo, on='name')
-    fig = resultado_final
-    return fig
+
+    resultado_final = resultado_final.rename(columns={'name': 'Jogador', 'vitorias':'Vitorias', 'media_tempo': 'Tempo Médio (Min)'})    
+
+    fig_table = resultado_final
+
+    # Gráfico de barras com estrelas
+    fig = px.bar(resultado_final, x='Vitorias', y='Jogador', orientation='h')
+
+
+    
+    return fig, fig_table
 
 
 def dps_geral_func(info_df, stats_dfo, df):
@@ -185,62 +202,127 @@ def dps_heroisup_geral_func(info_df, stats_dfo, df):
     dps_media_heroi = dps_media_heroi.rename(columns={'hero_nome': 'hero_nome'})
 
     # Exibir o DataFrame resultante
-    fig_heroi = dps_media_heroi
-
+    fig_heroi = dps_media_heroi.rename(columns={'hero_nome': 'Nome', 'dps':'DPS'})
+    
     dps_media_suporte = dps_media.query('pokemon != -1')
-    fig_sup = dps_media_suporte
+    fig_sup = dps_media_suporte[['nome', 'dps']].rename(columns={'nome': 'Nome', 'dps':'DPS'})
     return fig_heroi, fig_sup
 
-# def herois_mais_usados_func(df):
-#     # Criar um DataFrame com os dados
-#     df_info_normalized = pd.json_normalize(df['info'].tolist())
-#     df_info_normalized['name'] = df['name']
-#     df_info_normalized['hero_nome'] = df_info_normalized['character'].apply(hero_nome_id)
+def jogador_mais_tempo_func(info_df):
+    #
+    aux_df = info_df
 
-#     # Criar uma tabela com a contagem de cada personagem usando groupby
-#     tabela_contagem_personagens = df_info_normalized.groupby(['character', 'hero_nome']).size().reset_index(name='quantidade')
+    # Calcular a quantidade total de tempo jogado por 'name' em segundos
+    tempo_total_jogo_nome = aux_df.groupby('name')['time'].sum().reset_index(name='tempo_total_segundos')
+
+    # Converter os segundos para horas
+    tempo_total_jogo_nome['tempo_total_horas'] = tempo_total_jogo_nome['tempo_total_segundos'] / 3600
+
+    # Converter os segundos para formato de hora
+    tempo_total_jogo_nome['tempo_total_horas'] = pd.to_datetime(tempo_total_jogo_nome['tempo_total_segundos'], unit='s').dt.strftime('%H:%M:%S')
+
+    tempo_total_jogo_nome = tempo_total_jogo_nome[['name', 'tempo_total_horas']]
+
+    tempo_total_jogo_nome = tempo_total_jogo_nome.rename(columns={'name': 'Jogador', 'tempo_total_horas':'Horas'})
+
+    fig_table = tempo_total_jogo_nome.sort_values(by='Horas', ascending=False)
+    #tempo_total_jogo_nome[['name', 'tempo_total_horas']]
+
+    fig = tempo_total_jogo_nome.sort_values(by='Horas', ascending=False)
     
-#     # Mapear as cores para cada herói
-#     cores_herois = {
-#         'Bulbasaur': '83ba36',
-#         'Charmander': '#e53800',
-#         'Pikachu': '#f4dc26',
-#         'Squirtle': '#93c8d0'
-#     }
+    # Criar um gráfico de barras interativo com o Plotly
+    fig = px.bar(tempo_total_jogo_nome, x='Jogador', y='Horas', labels={'total_time_seconds': 'Tempo Total Jogado (segundos)'})
 
-#     # Criar o gráfico de pizza com cores personalizadas
-#     fig = go.Figure()
+    # Personalizar layout
+    fig.update_layout(
+        xaxis_title='Jogador',
+        yaxis_title='Tempo Total Jogado',
+        xaxis=dict(tickvals=tempo_total_jogo_nome['Jogador'], ticktext=tempo_total_jogo_nome['Jogador'], autorange="reversed")
+        )
+    
 
-#     fig.add_trace(go.Pie(
-#         labels=tabela_contagem_personagens['hero_nome'],
-#         values=tabela_contagem_personagens['quantidade'],
-#         marker=dict(colors=[cores_herois[heroi] for heroi in tabela_contagem_personagens['hero_nome']]),
-#         textinfo='percent+label',  # Exibir percentagem e rótulo
-#         textposition='inside',  # Colocar o texto dentro da fatia
-#     ))
+    return fig, fig_table
 
-#     return fig
+def heroi_preferido_jogador_func(info_df):
+    heroi_preferido_por_jogador = info_df 
 
-# def dps_media_func(df):
-#     # Normalizar 'info'
-#     info_df = pd.json_normalize(df['info'].tolist())
+    # Calcular a contagem de ocorrências de cada personagem por jogador
+    heroi_preferido_por_jogador = heroi_preferido_por_jogador.groupby(['name', 'hero_nome']).size().reset_index(name='quantidade')
 
-#     # Abrir statistics
-#     stats_df = pd.DataFrame(info_df['statistics'].explode().tolist())
+    # Encontrar o índice do primeiro valor máximo para cada jogador
+    idx = heroi_preferido_por_jogador.groupby('name')['quantidade'].idxmax()
+    heroi_preferido_por_jogador = heroi_preferido_por_jogador.loc[idx]
 
-#     # Adicionar colunas 'name' e 'time' de volta
-#     stats_df['name'] = df['name'].repeat(info_df['statistics'].apply(len).tolist()).reset_index(drop=True)
-#     stats_df['time'] = df['time'].repeat(info_df['statistics'].apply(len).tolist()).reset_index(drop=True)
+    # Exibir a tabela final
+    fig_table = heroi_preferido_por_jogador[['name', 'hero_nome', 'quantidade']].rename(columns={'name': 'Jogador', 'hero_nome': 'Heroi', 'quantidade': 'Quant'})
 
-#     # Converter colunas para float
-#     stats_df['startTime'] = stats_df['startTime'].str.replace(',', '.').astype(float)
-#     stats_df['time'] = stats_df['time'].str.replace(',', '.').astype(float)
-#     stats_df['damage'] = stats_df['damage'].str.replace(',', '.').astype(int)
+    return fig_table
 
-#     # Calcular DPS
-#     stats_df['dps'] = stats_df['damage'] / (stats_df['time'] - stats_df['startTime'])
 
-#     # Calcular média do DPS para cada pokemon
-#     average_dps = stats_df.groupby('pokemon')['dps'].mean().reset_index()
+def hist_partidas_func(info_df):
+    info_df_exp = info_df.copy()
+    # Normalizar a coluna 'statistics'
 
-#     return average_dps
+    info_df_exp = json_normalize(info_df['statistics'].tolist())
+
+    # Juntar o DataFrame normalizado de volta ao DataFrame original
+    info_df_exp = pd.concat([info_df, info_df_exp], axis=1)
+
+    # Descartar a coluna 'statistics' original se desejado
+    info_df_exp = info_df_exp.drop('statistics', axis=1)
+
+    #
+    info_df_exp0 = info_df_exp[0].apply(pd.Series).rename(columns={'startTime': 'startTime0', 'pokemon': 'pokemon0', 'damage': 'damage0'})
+    info_df_exp1 = info_df_exp[1].apply(pd.Series).rename(columns={'startTime': 'startTime1', 'pokemon': 'pokemon1', 'damage': 'damage1'})
+    info_df_exp2 = info_df_exp[2].apply(pd.Series).rename(columns={'startTime': 'startTime2', 'pokemon': 'pokemon2', 'damage': 'damage2'})
+    info_df_exp3 = info_df_exp[3].apply(pd.Series).rename(columns={'startTime': 'startTime3', 'pokemon': 'pokemon3', 'damage': 'damage3'})
+    info_df_exp4 = info_df_exp[4].apply(pd.Series).rename(columns={'startTime': 'startTime4', 'pokemon': 'pokemon4', 'damage': 'damage4'})
+    info_df_exp5 = info_df_exp[5].apply(pd.Series).rename(columns={'startTime': 'startTime5', 'pokemon': 'pokemon5', 'damage': 'damage5'})
+
+    # 
+    info_df_exp = pd.concat([info_df_exp, info_df_exp0, info_df_exp1, info_df_exp2, info_df_exp3, info_df_exp4, info_df_exp5], axis=1)
+    
+    # Colocando nnome dos suportes
+    coluna_formatar = ['pokemon1', 'pokemon2', 'pokemon3', 'pokemon4', 'pokemon5']
+    for coluna in coluna_formatar:
+        info_df_exp[coluna] = info_df_exp[coluna].apply(support_id_nome)
+    
+    # Colocando nnome dos herois
+    info_df_exp['pokemon0'] = info_df_exp['character'].apply(hero_nome_id)
+
+
+    # Limpando dados dda tabela
+    info_df_exp = info_df_exp.drop([0, 1, 2, 3, 4, 5, 'nomePc', 'character'], axis=1)
+    info_df_exp['Ordem'] = [f'{ordem}°' for ordem in range(1, len(info_df_exp) + 1)]
+
+    info_df_exp = info_df_exp[['Ordem', 'name', 'level','endTime', 'pokemon0', 'damage0', 'pokemon1', 'damage1', 'startTime1', 'pokemon2', 'damage2', 'startTime2', 'pokemon3', 'damage3', 'startTime3',  'pokemon4', 'damage4', 'startTime4', 'pokemon5', 'damage5', 'startTime5']]
+
+    # Formatar datas
+    coluna_formatar = ['startTime1', 'startTime2', 'startTime3', 'startTime4', 'startTime5']
+    for coluna in coluna_formatar:
+        info_df_exp[coluna] = pd.to_numeric(info_df_exp[coluna].str.replace(',', '.'))
+        info_df_exp[coluna] = pd.to_datetime(info_df_exp[coluna], unit='s').dt.strftime('%M:%S:%f').str[:-3]
+
+    # Renomear colunas
+    info_df_exp = info_df_exp.rename(columns={'name': 'Jogador', 'endTime': 'Tempo', 'pokemon0': 'Heroi', 'damage0': 'Dano Heroi', 'pokemon1': 'Suporte 1', 'damage1': 'Dano Sup 1', 'startTime1': 'Tempo Sup 1', 'pokemon2': 'Suporte 2', 'damage2': 'Dano Sup 2', 'startTime2': 'Tempo Sup 2', 'pokemon3': 'Suporte 3', 'damage3': 'Dano Sup 3', 'startTime3': 'Tempo Sup 3', 'pokemon4': 'Suporte 4', 'damage4': 'Dano Sup 4', 'startTime4': 'Tempo Sup 4', 'pokemon5': 'Suporte 5', 'damage5': 'Dano Sup 5', 'startTime5': 'Tempo Sup 5'})
+
+    fig_table_rank_geral = info_df_exp.sort_index(ascending=True)
+
+    info_df_exp_un = info_df_exp.copy()
+    
+    min_indices = info_df_exp_un.groupby('Jogador')['Tempo'].idxmin()
+
+    info_df_exp_un = info_df_exp_un.loc[min_indices].sort_values(by='Tempo', ascending=True).reset_index(drop=True)
+
+    info_df_exp_un['Ordem'] = [f'{ordem}°' for ordem in range(1, len(info_df_exp_un) + 1)]
+
+    fig_table_rank_unico = info_df_exp_un
+
+    pri_rank = fig_table_rank_unico['Jogador'].iloc[0]
+
+    seg_rank = fig_table_rank_unico['Jogador'].iloc[1]
+    
+    ter_rank = fig_table_rank_unico['Jogador'].iloc[2]
+
+
+    return fig_table_rank_geral, fig_table_rank_unico, pri_rank, seg_rank, ter_rank
